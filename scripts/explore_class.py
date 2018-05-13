@@ -34,48 +34,30 @@ class ME134_Explorer:
         self.mode = None
 
         self.goal_queue = []
-        # listen to geometry_msgs and nav_msgs topics
+        # Subscribe to all the necessary topics to get messages as they come in.
         rospy.init_node('me134_explorer', anonymous=False)
         #rospy.Subscriber("amcl_pose", PoseWithCovarianceStamped, self.poseCallback)
         rospy.Subscriber("map", OccupancyGrid, self.mapCallback)
         rospy.Subscriber("scan", LaserScan, self.scanCallback)
         rospy.Subscriber("move_base/status",GoalStatusArray, self.goalStatusCallback)
+        rospy.loginfo('Subscribed to map, scan, move_base/status topics')
         
-        # listner recieves tf2 messages and buffers them for up to 10 seconds
-        tfBuffer = tf2_ros.Buffer()
-        listener = tf2_ros.TransformListener(tfBuffer)
-        rospy.loginfo('Subscribed to map, scan, move_base/status, tf2 topics')
+        # Create a transform buffer (buffers messages for up to 10 seconds), and a listener to recieve tf2 messages from it. 
+        self.tfBuffer = tf2_ros.Buffer()
+        self.tfListener = tf2_ros.TransformListener(self.tfBuffer)
+        #self.tfListener.callback(self.poseCallback) # this line doesn't work
 
-        rate2 = rospy.Rate(1.0)
-        rate2.sleep()
-        rospy.loginfo('frames:'+ tfBuffer.all_frames_as_string())
-        while not rospy.is_shutdown():
-            try:
-                # note: this 4th argument below means this call will block until the transform becomes available, until timeout
-                tfmsg = tfBuffer.lookup_transform('map', 'base_link', rospy.Time(), rospy.Duration(1.0))
-                # tfmsg is of type geometry_msgs/TransformStamped: http://docs.ros.org/api/geometry_msgs/html/msg/TransformStamped.html
-                rospy.loginfo('map to base_link transform: '+ str(tfmsg))
-                # parse info from TransformStamped message
-                header = tfmsg.header
-                translation = tfmsg.transform.translation
-                orientation = tfmsg.transform.rotation
-               
-                # Create PoseStamped message from tfmsg. We are assuming here that map frame is at (0,0)                
-                position = Point(translation.x,translation.y,translation.z)
-                currentPose = PoseStamped(header, Pose(position, orientation))
-                rospy.loginfo('PoseStamped message: '+str(currentPose))
-
-            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                rate2.sleep()
-
-                
+        # all_frames_as_string is useful for debugging, to see what transforms exist. It needs the sleep call because it takes a moment to start
+        #rospy.Rate(10).sleep()
+        #rospy.loginfo('frames:'+ self.tfBuffer.all_frames_as_string())
 
         self.pub_goal = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=10)
         rospy.loginfo('explorer online')
         pass
             
+
     def CheckIfHaveMapScanPose(self):
-        return self.last_map and self.last_scan #and self.last_pose
+        return self.last_map and self.last_scan and self.last_pose
 
     def AddInplaceRotationsToQueue(self):
         import math
@@ -153,11 +135,28 @@ class ME134_Explorer:
         #text: "Goal reached."
         pass
 
-    # def poseCallback(self,poseData):
-    #     rospy.loginfo(rospy.get_caller_id()+" pose received: {}".format(poseData))
-    #     self.last_pose = poseData
-    #     print("pose received: {}".format(poseData))
-    #     pass
+    def getLastPose(self):
+        try:
+            # note: the 4th argument below means this call will block until the transform becomes available, or until timeout
+            tfmsg = self.tfBuffer.lookup_transform('map', 'base_link', rospy.Time(), rospy.Duration(1.0))
+            # tfmsg is of type geometry_msgs/TransformStamped: http://docs.ros.org/api/geometry_msgs/html/msg/TransformStamped.html
+            rospy.loginfo('map to base_link transform: '+ str(tfmsg))
+            # parse info from TransformStamped message
+            header = tfmsg.header
+            translation = tfmsg.transform.translation
+            orientation = tfmsg.transform.rotation
+            
+            # Create PoseStamped message from tfmsg. We are assuming here that map frame is at (0,0)                
+            position = Point(translation.x,translation.y,translation.z)
+            self.last_pose = PoseStamped(header, Pose(position, orientation))
+            rospy.loginfo('PoseStamped message: '+str(self.last_pose))
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            return false
+
+         #rospy.loginfo(rospy.get_caller_id()+" pose received: {}".format(poseData))
+         #self.last_pose = poseData
+         #print("pose received: {}".format(poseData))
+        pass
 
     def mapCallback(self,occupancyGridData):
         #rospy.loginfo(rospy.get_caller_id()+"map received: {}".format(occupancyGridData))
@@ -168,6 +167,9 @@ class ME134_Explorer:
         if mapData does ont have any -1s (no frontiers exist):
         mapExpored = True
         '''
+
+        # also update self.last_pose from most recent transform 
+
         pass
     
     def scanCallback(self,scanData):
@@ -200,7 +202,7 @@ class ME134_Explorer:
         
         print "Mode=",self.mode
         if self.CheckIfHaveMapScanPose():
-            if self.mode is None:
+            if self.mode is None: # in the beginning
                 self.AddInplaceRotationsToQueue()
                 self.mode = "Rotating"
                 x,y,yaw = self.goal_queue.pop()
@@ -219,10 +221,16 @@ class ME134_Explorer:
             pass
         else:
             print "NoMapScan"
+            self.getLastPose()
             pass
         if self.abort:
             return True
         return False
+
+
+
+       
+
     pass
 
 def explorer():
