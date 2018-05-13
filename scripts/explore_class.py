@@ -25,7 +25,7 @@ class ME134_Explorer:
         self.last_goal = None
         self.last_map = None
         self.last_scan = None
-        self.last_pose = None
+        self.last_pose = None # this will be a tuple of (x position, y position, yaw angle)
         self.last_goal_status = None
         self.last_goal_accepted = False
         self.last_goal_reached = False
@@ -147,9 +147,12 @@ class ME134_Explorer:
             orientation = tfmsg.transform.rotation
             
             # Create PoseStamped message from tfmsg. We are assuming here that map frame is at (0,0)                
-            position = Point(translation.x,translation.y,translation.z)
-            self.last_pose = PoseStamped(header, Pose(position, orientation))
-            rospy.loginfo('PoseStamped message: '+str(self.last_pose))
+            #position = Point(translation.x,translation.y,translation.z)
+            #PSmsg = PoseStamped(header, Pose(position, orientation))
+            #rospy.loginfo('PoseStamped message: '+str(self.last_pose))
+
+            [pitch,roll,yaw] = tf.euler_from_quaternion(orientation)
+            self.last_pose = (translation.x, translation.y, yaw)
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             return false
 

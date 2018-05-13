@@ -4,19 +4,20 @@
 ## to the 'chatter' topic
 
 import rospy
+import tf2_ros
+import ros_numpy
+import actionlib
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import Pose, Point
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import MapMetaData
 from sensor_msgs.msg import LaserScan
 from actionlib_msgs.msg import GoalStatusArray
-from tf.transformations import euler_from_quaternion, quaternion_from_euler
-import ros_numpy
-#from std_msgs.msg import Int8MultiArray
-import rospy
-import actionlib
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+#from std_msgs.msg import Int8MultiArray
 
 
 class ME134_Explorer:
@@ -24,26 +25,37 @@ class ME134_Explorer:
         self.last_goal = None
         self.last_map = None
         self.last_map_metadata = None
-        self.last_scan = None
+        self.last_scan = None # this will be a tuple of (x position, y position, yaw angle)
         self.last_pose = None
         self.abort = False
         self.mode = None
 
         self.goal_queue = []
-        # listen to geometry_msgs and nav_msgs topics
+
+        # Subscribe to all the necessary topics to get messages as they come in.
         rospy.init_node('me134_explorer', anonymous=False)
         #rospy.Subscriber("amcl_pose", PoseWithCovarianceStamped, self.poseCallback)
         rospy.Subscriber("map", OccupancyGrid, self.mapCallback)
-        rospy.Subscriber("map_metadata", MapMetaData, self.mapMetaDataCallback)
         #rospy.Subscriber("scan", LaserScan, self.scanCallback)
         #rospy.Subscriber("move_base/status",GoalStatusArray, self.goalStatusCallback)
+        rospy.loginfo('Subscribed to map, scan, move_base/status topics')
+        
+        # Create a transform buffer (buffers messages for up to 10 seconds), and a listener to recieve tf2 messages from it. 
+        self.tfBuffer = tf2_ros.Buffer()
+        self.tfListener = tf2_ros.TransformListener(self.tfBuffer)
+        #self.tfListener.callback(self.poseCallback) # this line doesn't work
+
+        # all_frames_as_string is useful for debugging, to see what transforms exist. 
+        # It needs the sleep call because it takes a moment to start up
+        #rospy.Rate(10).sleep()
+        #rospy.loginfo('frames:'+ self.tfBuffer.all_frames_as_string())
         
         self.pub_goal = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=10)
         rospy.loginfo('explorer online')
         pass
 
     def CheckIfHaveFirstData(self):
-        return self.last_map and self.last_map_metadata #and self.last_pose
+        return self.last_map and self.last_map_metadata and self.last_pose
 
     def AddInplaceRotationsToQueue(self):
         import math
@@ -56,13 +68,35 @@ class ME134_Explorer:
         pass
     
     
-        
+    def getLastPose(self):
+        try:
+            # Check the tf buffer for the latest transform
+            # tfmsg is of type geometry_msgs/TransformStamped: http://docs.ros.org/api/geometry_msgs/html/msg/TransformStamped.html
+            tfmsg = self.tfBuffer.lookup_transform('map', 'base_link', rospy.Time())
+            # Note: with a 4th argument, lookup_transform blocks until tranform recieved or until timeout
+            #tfmsg = self.tfBuffer.lookup_transform('map', 'base_link', rospy.Time(), rospy.Duration(1.0))
+            
+            rospy.loginfo('map to base_link transform: '+ str(tfmsg))
+            # parse info from TransformStamped message
+            header = tfmsg.header
+            translation = tfmsg.transform.translation
+            orientation = tfmsg.transform.rotation
+            
+            # Create PoseStamped message from tfmsg. We are assuming here that map frame is at (0,0)                
+            #position = Point(translation.x,translation.y,translation.z)
+            #PSmsg = PoseStamped(header, Pose(position, orientation))
+            #rospy.loginfo('PoseStamped message: '+str(self.last_pose))
+
+            [pitch,roll,yaw] = tf.euler_from_quaternion(orientation)
+            self.last_pose = (translation.x, translation.y, yaw)
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            return false
+
+         #rospy.loginfo(rospy.get_caller_id()+" pose received: {}".format(poseData))
+         #self.last_pose = poseData
+         #print("pose received: {}".format(poseData))
+        pass        
     
-    # def poseCallback(self,poseData):
-    #     rospy.loginfo(rospy.get_caller_id()+" pose received: {}".format(poseData))
-    #     self.last_pose = poseData
-    #     print("pose received: {}".format(poseData))
-    #     pass
 
     def mapCallback(self,occupancyGridData):
         #rospy.loginfo(rospy.get_caller_id()+"map received: {}".format(occupancyGridData))
@@ -133,9 +167,11 @@ class ME134_Explorer:
 
     def Step(self):
         print "Mode=",self.mode
+
+        self.getLastPose()
         if self.CheckIfHaveFirstData():
             self.PlotMap()
-            if self.mode is None:
+            if self.mode is None: # in the beginning
                 self.goal_queue.append((0,0,0))
                 self.AddInplaceRotationsToQueue()
                 self.mode = "Rotating"
