@@ -120,6 +120,8 @@ class ME134_Explorer:
     def PlotMap(self):
         assert self.last_map
         import matplotlib.pyplot as plt
+        import pylab
+        import qt
                 
         #plt.imshow(self.last_map_from_above,extent=self.last_map_from_above_extents)
         fig,ax = plt.subplots()
