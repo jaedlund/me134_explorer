@@ -4,8 +4,8 @@
 ## to the 'chatter' topic
 
 import rospy
-import tf
-#import tf2_ros
+import time
+import tf2_ros
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -42,22 +42,22 @@ class ME134_Explorer:
         rospy.Subscriber("move_base/status",GoalStatusArray, self.goalStatusCallback)
         
         # listner recieves tf2 messages and buffers them for up to 10 seconds
-        #tfBuffer = tf2_ros.Buffer()
-        #listener = tf2_ros.TransformListener(tfBuffer)
+        tfBuffer = tf2_ros.Buffer()
+        listener = tf2_ros.TransformListener(tfBuffer)
         rospy.loginfo('Subscribed to map, scan, move_base/status, tf2 topics')
 
+        rate = rospy.Rate(10.0)
+        rate.sleep()
+        rospy.loginfo('frames:'+ tfBuffer.all_frames_as_string())
+        while not rospy.is_shutdown():
+            try:
+                trans = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
+                rospy.loginfo('map to odom:'+ str(trans))
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                rate.sleep()
 
-        listener = tf.TransformListener()
-        if listener.frameExists('base_link'):
-            rospy.loginfo('base link exists')
-        else:
-            rospy.loginfo('does not exist')
 
-
-        (trans,rot) = listener.lookupTransform('map', 'odom', rospy.Time(0))
-
-            
-
+    
 
         self.pub_goal = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=10)
         rospy.loginfo('explorer online')
