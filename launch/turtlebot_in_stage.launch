@@ -81,7 +81,8 @@
    </include>
 -->
   
-  <include file="$(find turtlebot_navigation)/launch/includes/gmapping/gmapping.launch.xml">
+  <!--include file="$(find turtlebot_navigation)/launch/includes/gmapping/gmapping.launch.xml"-->
+  <include file="$(find me134_explorer)/launch/includes/gmapping/gmapping.launch.xml">
   </include>
 
   <!--  **************** Visualisation ****************  -->

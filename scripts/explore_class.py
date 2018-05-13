@@ -8,7 +8,7 @@ import time
 import tf2_ros
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import Pose, Point
 from geometry_msgs.msg import TransformStamped
 #from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import OccupancyGrid
@@ -46,18 +46,29 @@ class ME134_Explorer:
         listener = tf2_ros.TransformListener(tfBuffer)
         rospy.loginfo('Subscribed to map, scan, move_base/status, tf2 topics')
 
-        rate = rospy.Rate(10.0)
-        rate.sleep()
+        rate2 = rospy.Rate(1.0)
+        rate2.sleep()
         rospy.loginfo('frames:'+ tfBuffer.all_frames_as_string())
         while not rospy.is_shutdown():
             try:
-                trans = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
-                rospy.loginfo('map to odom:'+ str(trans))
+                # note: this 4th argument below means this call will block until the transform becomes available, until timeout
+                tfmsg = tfBuffer.lookup_transform('map', 'base_link', rospy.Time(), rospy.Duration(1.0))
+                # tfmsg is of type geometry_msgs/TransformStamped: http://docs.ros.org/api/geometry_msgs/html/msg/TransformStamped.html
+                rospy.loginfo('map to base_link transform: '+ str(tfmsg))
+                # parse info from TransformStamped message
+                header = tfmsg.header
+                translation = tfmsg.transform.translation
+                orientation = tfmsg.transform.rotation
+               
+                # Create PoseStamped message from tfmsg. We are assuming here that map frame is at (0,0)                
+                position = Point(translation.x,translation.y,translation.z)
+                currentPose = PoseStamped(header, Pose(position, orientation))
+                rospy.loginfo('PoseStamped message: '+str(currentPose))
+
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                rate.sleep()
+                rate2.sleep()
 
-
-    
+                
 
         self.pub_goal = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=10)
         rospy.loginfo('explorer online')
