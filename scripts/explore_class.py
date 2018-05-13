@@ -4,14 +4,19 @@
 ## to the 'chatter' topic
 
 import rospy
+import tf
+#import tf2_ros
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import TransformStamped
+#from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import MapMetaData
 from sensor_msgs.msg import LaserScan
 from actionlib_msgs.msg import GoalStatusArray
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
+# TODO: tf is deprecated since Hydro; use tf2
 
 #from std_msgs.msg import Int8MultiArray
 
@@ -27,15 +32,33 @@ class ME134_Explorer:
         
         # listen to geometry_msgs and nav_msgs topics
         rospy.init_node('me134_explorer', anonymous=False)
-        rospy.Subscriber("amcl_pose", PoseWithCovarianceStamped, self.poseCallback)
+        rospy.Subscriber("amcl_pose", PoseWithCovarianceStamped, self.poseCallback) 
         rospy.Subscriber("map", OccupancyGrid, self.mapCallback)
         rospy.Subscriber("scan", LaserScan, self.scanCallback)
         rospy.Subscriber("move_base/status",GoalStatusArray, self.goalStatusCallback)
         
+        # listner recieves tf2 messages and buffers them for up to 10 seconds
+        #tfBuffer = tf2_ros.Buffer()
+        #listener = tf2_ros.TransformListener(tfBuffer)
+        rospy.loginfo('Subscribed to map, scan, move_base/status, tf2 topics')
+
+
+        listener = tf.TransformListener()
+        if listener.frameExists('base_link'):
+            rospy.loginfo('base link exists')
+        else:
+            rospy.loginfo('does not exist')
+
+
+        (trans,rot) = listener.lookupTransform('map', 'odom', rospy.Time(0))
+
+            
+
+
         self.pub_goal = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=10)
         rospy.loginfo('explorer online')
         pass
-
+            
     def CheckIfHaveMapScanPose(self):
         return self.last_map and self.last_scan and self.last_pose
     
