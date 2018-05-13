@@ -50,12 +50,12 @@ class ME134_Explorer:
         #rospy.Rate(10).sleep()
         #rospy.loginfo('frames:'+ self.tfBuffer.all_frames_as_string())
         
-        self.pub_goal = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=10)
+        #self.pub_goal = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=10)
         rospy.loginfo('explorer online')
         pass
 
     def CheckIfHaveFirstData(self):
-        return self.last_map and self.last_map_metadata and self.last_pose
+        return self.last_map and self.last_pose #and self.last_map_metadata 
 
     def AddInplaceRotationsToQueue(self):
         import math
@@ -76,21 +76,24 @@ class ME134_Explorer:
             # Note: with a 4th argument, lookup_transform blocks until tranform recieved or until timeout
             #tfmsg = self.tfBuffer.lookup_transform('map', 'base_link', rospy.Time(), rospy.Duration(1.0))
             
-            rospy.loginfo('map to base_link transform: '+ str(tfmsg))
             # parse info from TransformStamped message
+            #rospy.loginfo('map to base_link transform: '+ str(tfmsg))
             header = tfmsg.header
-            translation = tfmsg.transform.translation
-            orientation = tfmsg.transform.rotation
+            trans = tfmsg.transform.translation
+            orient = tfmsg.transform.rotation
             
             # Create PoseStamped message from tfmsg. We are assuming here that map frame is at (0,0)                
             #position = Point(translation.x,translation.y,translation.z)
             #PSmsg = PoseStamped(header, Pose(position, orientation))
             #rospy.loginfo('PoseStamped message: '+str(self.last_pose))
 
-            [pitch,roll,yaw] = tf.euler_from_quaternion(orientation)
-            self.last_pose = (translation.x, translation.y, yaw)
+            # Note: apparently the geometry_msgs quaternion is not the same as the tf.transformations quaternion,
+            # so we need to do this explicitly rather than simply using euler_from_quaternion(orientation)
+            [pitch,roll,yaw] = euler_from_quaternion([orient.x,orient.y,orient.z,orient.w])
+            self.last_pose = (trans.x, trans.y, yaw)
+            rospy.loginfo('Pose: '+str(self.last_pose))
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-            return false
+            return False
 
          #rospy.loginfo(rospy.get_caller_id()+" pose received: {}".format(poseData))
          #self.last_pose = poseData
