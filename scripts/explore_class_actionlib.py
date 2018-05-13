@@ -69,20 +69,28 @@ class ME134_Explorer:
         #rospy.loginfo(rospy.get_caller_id()+" map received.")
         self.last_map = occupancyGridData
         self.last_map_numpy = ros_numpy.occupancy_grid.occupancygrid_to_numpy(self.last_map)
+        #self.last_map_from_above = numpy.flipud(self.last_map_numpy)
         
+        resolution = self.last_map.info.resolution
+        left = self.last_map.info.origin.position.x
+        right = left + self.last_map.info.width*resolution
+        bottom = self.last_map.info.origin.position.y
+        top = bottom + self.last_map.info.height*resolution
+        self.last_map_extents = (left,right,bottom,top) 
+
         pass
 
     def PlotMap(self):
         assert self.last_map
         import matplotlib.pyplot as plt
-        resolution = self.last_map.info.resolution
-        zero_position_x = self.last_map.info.pose.position.x
-        zero_position_y = self.last_map.info.pose.position.y
-        max_position_x = self.last_map.info.width*resolution
-        max_position_y = self.last_map.info.height*resolution
-        print self.last_map_metadata.info #: 0.0500000007451
-        print "map.shape = ",self.last_map_numpy.shape
-        plt.imshow(self.last_map_numpy,extent=(left,right,bottom,top)) # working on this here
+                
+        #plt.imshow(self.last_map_from_above,extent=self.last_map_from_above_extents)
+        fig,ax = plt.subplots()
+    
+        ax.imshow(self.last_map_numpy,extent=self.last_map_extents,origin='lower')
+        #x,y,yaw= self.Get_x_y_yaw()
+        x,y,yaw= 0,0,0
+        ax.plot(x,y,'o')
         plt.show()
         
     def mapMetaDataCallback(self,mapMetaData):
