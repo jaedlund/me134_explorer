@@ -44,5 +44,5 @@ define turtlebot position
   hokuyolaser(pose [ 0.06 0.0 -0.17 0.0 ])
   # pose [ x y z orientation]
 
-+#br_lidar.sendTransform((0.06, 0.0, 0.23), (0.0, 0.0, 0.0, 1.0), rospy.Time.now(), "laser", "base_link")
+  #br_lidar.sendTransform((0.06, 0.0, 0.23), (0.0, 0.0, 0.0, 1.0), rospy.Time.now(), "laser", "base_link")
 )

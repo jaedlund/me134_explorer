@@ -22,12 +22,16 @@ class ME134_Explorer:
         self.last_scan = None
         self.last_pose = None
         self.last_goal_status = None
-        self.goal_reached=False
+        self.last_goal_accepted = False
+        self.last_goal_reached = False
+        self.last_goal_stamp = None
         self.abort = False
-        
+        self.mode = None
+
+        self.goal_queue = []
         # listen to geometry_msgs and nav_msgs topics
         rospy.init_node('me134_explorer', anonymous=False)
-        rospy.Subscriber("amcl_pose", PoseWithCovarianceStamped, self.poseCallback)
+        #rospy.Subscriber("amcl_pose", PoseWithCovarianceStamped, self.poseCallback)
         rospy.Subscriber("map", OccupancyGrid, self.mapCallback)
         rospy.Subscriber("scan", LaserScan, self.scanCallback)
         rospy.Subscriber("move_base/status",GoalStatusArray, self.goalStatusCallback)
@@ -37,24 +41,74 @@ class ME134_Explorer:
         pass
 
     def CheckIfHaveMapScanPose(self):
-        return self.last_map and self.last_scan and self.last_pose
+        return self.last_map and self.last_scan #and self.last_pose
+
+    def AddInplaceRotationsToQueue(self):
+        import math
+        import numpy
+        last_x_y_yaw = (0,0,0)
+        x,y,yaw = last_x_y_yaw
+        for yaw_target in numpy.linspace(yaw,yaw+2*math.pi,10):
+            self.goal_queue.append((x,y,yaw_target))
+            pass
+        pass
     
     def goalStatusCallback(self,goalStatusArray):
+        """GoalID goal_id
+        uint8 status
+        #Allow for the user to associate a string with GoalStatus for debugging
+        string text
+
+        """
+        
         if goalStatusArray.status_list:
-            rospy.loginfo(rospy.get_caller_id()+" goalStatusArray received: {}".format(goalStatusArray.status_list))
+            #rospy.loginfo(rospy.get_caller_id()+" goalStatusArray received: {}".format(goalStatusArray.status_list))
             pass
         self.last_goal_status = goalStatusArray
         for goal_status in goalStatusArray.status_list:
             #TODO verify that the goal_id matches the goal that we set
-
+            goal_id = goal_status.goal_id.id
+            goal_stamp = goal_status.goal_id.stamp
             goal_status_code = goal_status.status
             goal_status_text = goal_status.text
-            if goal_status_code == 3:
-                # Goal reached
-                self.goal_reached = True
+            if goal_stamp != self.last_goal_stamp:
+                print "Ignoring old message:",goal_id,goal_status_text
                 pass
-            elif goal_status_code == 4:
+            print "Goal has status: {}".format(goal_status_text)
+            if goal_status_code == goal_status.PENDING:
+                # The goal has yet to be processed by the action server
+                pass
+            elif goal_status_code == goal_status.ACTIVE:
+                # The goal is currently being processed by the action server
+                pass
+            elif goal_status_code == goal_status.PREEMPTED:
+                # The goal received a cancel request after it started executing
+                #   and has since completed its execution (Terminal State)
+                pass
+            elif goal_status_code == goal_status.SUCCEEDED:
+                # The goal was achieved successfully by the action server (Terminal State)
+                self.last_goal_reached = True
+                pass
+            elif goal_status_code == goal_status.ABORTED:
+                # The goal was aborted during execution by the action server due
+                #    to some failure (Terminal State)
                 self.abort = True
+                pass
+            elif goal_status_code == goal_status.REJECTED:
+                # The goal was rejected by the action server without being processed,
+                #    because the goal was unattainable or invalid (Terminal State)
+                pass
+            elif goal_status_code == goal_status.PREEMPTING:
+                # The goal received a cancel request after it started executing
+                #    and has not yet completed execution
+                pass
+            elif goal_status_code == goal_status.RECALLING:
+                # The goal received a cancel request before it started executing,
+                #    but the action server has not yet confirmed that the goal is canceled
+                pass
+            elif goal_status_code == goal_status.RECALLED:
+                # The goal received a cancel request before it started executing
+                pass
             pass
         #        [goal_id: 
         #  stamp: 
@@ -65,11 +119,11 @@ class ME134_Explorer:
         #text: "Goal reached."
         pass
 
-    def poseCallback(self,poseData):
-        rospy.loginfo(rospy.get_caller_id()+" pose received: {}".format(poseData))
-        self.last_pose = poseData
-        print("pose received: {}".format(poseData))
-        pass
+    # def poseCallback(self,poseData):
+    #     rospy.loginfo(rospy.get_caller_id()+" pose received: {}".format(poseData))
+    #     self.last_pose = poseData
+    #     print("pose received: {}".format(poseData))
+    #     pass
 
     def mapCallback(self,occupancyGridData):
         #rospy.loginfo(rospy.get_caller_id()+"map received: {}".format(occupancyGridData))
@@ -101,19 +155,37 @@ class ME134_Explorer:
         goal.pose.orientation.z = q[2]
         goal.pose.orientation.w = q[3]
         self.last_goal = goal
-        rospy.loginfo(rospy.get_caller_id()+" set goal pose: {}".format(goal))
-        self.goal_reached=False
+        self.last_goal_stamp = goal.header.stamp
+        rospy.loginfo(rospy.get_caller_id()+" set goal pose stamp: {}".format(goal.header.stamp))
+        rospy.loginfo(rospy.get_caller_id()+" set goal pose: {}".format(goal.pose))
+        self.last_goal_reached=False
         self.pub_goal.publish(goal)
         pass
 
     def Step(self):
+        
+        print "Mode=",self.mode
         if self.CheckIfHaveMapScanPose():
-            if not self.last_goal:
-                self.PublishGoal(1,1,0)
+            if self.mode is None:
+                self.AddInplaceRotationsToQueue()
+                self.mode = "Rotating"
+                x,y,yaw = self.goal_queue.pop()
+                self.PublishGoal(x,y,yaw)
+                pass
+            if self.goal_queue:
+                if self.last_goal_reached:
+                    x,y,yaw = self.goal_queue.pop()
+                    self.PublishGoal(x,y,yaw)
+                    pass
+                pass
+            else:
+                if self.last_goal_reached:
+                    return True
                 pass
             pass
-        if self.goal_reached:
-            return True
+        else:
+            print "NoMapScan"
+            pass
         if self.abort:
             return True
         return False
