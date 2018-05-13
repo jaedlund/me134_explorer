@@ -12,7 +12,7 @@ from nav_msgs.msg import MapMetaData
 from sensor_msgs.msg import LaserScan
 from actionlib_msgs.msg import GoalStatusArray
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
-
+import ros_numpy
 #from std_msgs.msg import Int8MultiArray
 import rospy
 import actionlib
@@ -23,6 +23,7 @@ class ME134_Explorer:
     def __init__(self):
         self.last_goal = None
         self.last_map = None
+        self.last_map_metadata = None
         self.last_scan = None
         self.last_pose = None
         self.abort = False
@@ -33,15 +34,16 @@ class ME134_Explorer:
         rospy.init_node('me134_explorer', anonymous=False)
         #rospy.Subscriber("amcl_pose", PoseWithCovarianceStamped, self.poseCallback)
         rospy.Subscriber("map", OccupancyGrid, self.mapCallback)
-        rospy.Subscriber("scan", LaserScan, self.scanCallback)
+        rospy.Subscriber("map_metadata", MapMetaData, self.mapMetaDataCallback)
+        #rospy.Subscriber("scan", LaserScan, self.scanCallback)
         #rospy.Subscriber("move_base/status",GoalStatusArray, self.goalStatusCallback)
         
         self.pub_goal = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=10)
         rospy.loginfo('explorer online')
         pass
 
-    def CheckIfHaveMapScanPose(self):
-        return self.last_map and self.last_scan #and self.last_pose
+    def CheckIfHaveFirstData(self):
+        return self.last_map and self.last_map_metadata #and self.last_pose
 
     def AddInplaceRotationsToQueue(self):
         import math
@@ -53,7 +55,9 @@ class ME134_Explorer:
             pass
         pass
     
-
+    
+        
+    
     # def poseCallback(self,poseData):
     #     rospy.loginfo(rospy.get_caller_id()+" pose received: {}".format(poseData))
     #     self.last_pose = poseData
@@ -64,18 +68,34 @@ class ME134_Explorer:
         #rospy.loginfo(rospy.get_caller_id()+"map received: {}".format(occupancyGridData))
         #rospy.loginfo(rospy.get_caller_id()+" map received.")
         self.last_map = occupancyGridData
-        #mapdata.data = occupancyGridData.data
-        '''
-        if mapData does ont have any -1s (no frontiers exist):
-        mapExpored = True
-        '''
+        self.last_map_numpy = ros_numpy.occupancy_grid.occupancygrid_to_numpy(self.last_map)
+        
         pass
-    
-    def scanCallback(self,scanData):
+
+    def PlotMap(self):
+        assert self.last_map
+        import matplotlib.pyplot as plt
+        resolution = self.last_map.info.resolution
+        zero_position_x = self.last_map.info.pose.position.x
+        zero_position_y = self.last_map.info.pose.position.y
+        max_position_x = self.last_map.info.width*resolution
+        max_position_y = self.last_map.info.height*resolution
+        print self.last_map_metadata.info #: 0.0500000007451
+        print "map.shape = ",self.last_map_numpy.shape
+        plt.imshow(self.last_map_numpy,extent=(left,right,bottom,top)) # working on this here
+        plt.show()
+        
+    def mapMetaDataCallback(self,mapMetaData):
         #rospy.loginfo(rospy.get_caller_id()+"map received: {}".format(occupancyGridData))
-        #rospy.loginfo(rospy.get_caller_id()+" scan received.")
-        self.last_scan = scanData
+        #rospy.loginfo(rospy.get_caller_id()+" map received.")
+        self.last_map_metadata = mapMetaData
         pass
+
+    # def scanCallback(self,scanData):
+    #     #rospy.loginfo(rospy.get_caller_id()+"map received: {}".format(occupancyGridData))
+    #     #rospy.loginfo(rospy.get_caller_id()+" scan received.")
+    #     self.last_scan = scanData
+    #     pass
     
     def PublishGoal(self,x,y,yaw):
         rospy.loginfo(rospy.get_caller_id()+" requesting to move to {}".format((x,y,yaw)))
@@ -105,7 +125,8 @@ class ME134_Explorer:
 
     def Step(self):
         print "Mode=",self.mode
-        if self.CheckIfHaveMapScanPose():
+        if self.CheckIfHaveFirstData():
+            self.PlotMap()
             if self.mode is None:
                 self.goal_queue.append((0,0,0))
                 self.AddInplaceRotationsToQueue()
