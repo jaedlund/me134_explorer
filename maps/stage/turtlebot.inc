@@ -16,9 +16,10 @@ define hokuyolaser ranger
   sensor( 			
   # laser-specific properties
   # factory settings for URG-04LX-UG01  240 degrees 0.36 degrees per sample
+  # Our laser has about a 180 degree field of view and 512 samples
   range [ 0.0  5.6 ]
-  fov 240.0
-  samples 666
+  fov 180.0
+  samples 512
   )
   # generic model properties
   color "blue"

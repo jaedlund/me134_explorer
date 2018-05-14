@@ -44,12 +44,12 @@
   </node>
 
   <!--  ***************** Robot Model *****************  -->
-<!--  <include file="$(find turtlebot_bringup)/launch/includes/robot.launch.xml">
+<include file="$(find turtlebot_bringup)/launch/includes/robot.launch.xml">
     <arg name="base" value="$(arg base)" />
     <arg name="stacks" value="$(arg stacks)" />
     <arg name="3d_sensor" value="$(arg 3d_sensor)" />
   </include>
-  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+<!--  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
     <param name="use_gui" value="true"/>
   </node>
 -->

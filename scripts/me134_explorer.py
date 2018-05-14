@@ -38,6 +38,7 @@ class ME134_Explorer:
         self.last_pose = None # this will be a tuple of (x position, y position, yaw angle)
         self.abort = False
         self.mode = None
+        self.next_mode = None
 
         self.goal_queue = []
 
@@ -74,7 +75,14 @@ class ME134_Explorer:
             self.goal_queue.append((x,y,yaw_target))
             pass
         pass
-    
+
+    def AddMoveForwardToQueue(self,distance):
+        x,y,yaw = self.last_pose
+        x_new = x + distance*math.cos(yaw)
+        y_new = y + distance*math.sin(yaw)
+        self.goal_queue.append((x_new,y_new,yaw))
+        pass
+
     
     def getLastPose(self):
         try:
@@ -232,20 +240,26 @@ class ME134_Explorer:
         # Brute force way
         frontier_indices = []
         for (ia,ib) in zip(*free_space_indices):
-            for off_ia in (-1,0,1):
-                for off_ib in (-1,0,1):
-                    if off_ia == 0 and off_ib == 0:
-                        continue
-                    ia_new,ib_new = ia+off_ia,ib+off_ib
-                    if 0<=ia_new<m.shape[0] and 0<=ib_new<m.shape[1]:
-                        if m[ia_new,ib_new] == -1:
-                            frontier_indices.append((ia,ib))
-                            pass
+            has_unknown=False
+            has_free=False
+            for off_ia,off_ib in ((-1,0),(1,0),(0,-1),(0,1)):
+                if has_unknown and has_free:
+                    break
+                ia_new,ib_new = ia+off_ia,ib+off_ib
+                if 0<=ia_new<m.shape[0] and 0<=ib_new<m.shape[1]:
+                    if m[ia_new,ib_new] == -1:
+                        has_unknown=True
                         pass
-                    else:
-                        print "WARNING: free space at map edge"
+                    if m[ia_new,ib_new] == 0:
+                        has_free=True
                         pass
                     pass
+                else:
+                    print "WARNING: free space at map edge"
+                    pass
+                pass
+            if has_unknown and has_free:
+                frontier_indices.append((ia,ib))
                 pass
             pass
         return frontier_indices
@@ -274,6 +288,8 @@ class ME134_Explorer:
             pass
         print "Closest Frontier is at {}. It is {} meters from the robot.".format(target_x_y,min_distance)
         return target_x_y
+
+    
     
     def ProcessMap(self):
         self.frontier_indices = self.FindFrontier(self.last_map_numpy)
@@ -290,7 +306,7 @@ class ME134_Explorer:
         if self.CheckIfHaveFirstData():
             self.ProcessMap()
             print "goal_queue={}".format(self.goal_queue)
-            if plotEachStep and self.mode != "Rotating":
+            if plotEachStep and (self.mode not in ["Rotating","Initial Movement"]):
                 fig1=self.PlotCostMap()
                 fig2=self.PlotMap(overlay=self.overlay,overlay_colors=self.overlay_colors)
                 plt.show()
@@ -302,21 +318,30 @@ class ME134_Explorer:
                 pass
             else:
                 # Change the following code to run your algorithm
-            
+                self.mode = self.next_mode
+                
                 if self.mode is None: # in the beginning
                     #self.goal_queue.append((0,0,0))
-                    self.AddInplaceRotationsToQueue()
-                    self.mode = "Rotating"
+                    # There is a bug https://answers.ros.org/question/204740/dwa_local_planner-in-place-rotation-first-goal-does-not-work/
+                    # That means that the first movement can't be a turn in place
+                    # If we reverse a bit first the robot will rotate to clear the costmap
+
+                    self.AddMoveForwardToQueue(-0.25)
+                    # Then return to the starting place
+                    self.AddMoveForwardToQueue(0.25)
+                    self.mode = "Initial Movement"
+                    self.next_mode = "find_frontier"
+                    #self.next_mode = "Rotating" # If you still have visible frontiers 
                     pass
-                elif self.mode == "Rotating":
-                    #Done rotating
-                    
-                    self.mode = "find_frontier"
+                elif self.mode == "find_frontier":
+                    self.next_mode = "Rotating"
                     # You should find a position on the map that views a frontier
                     # from a safe distance using the global_cost_map and/or
                     # another algorithm. I'm only going to go to the closest one
                     # (probably not safe) for the demo.
                     target_x_y = self.FindClosestFrontier(min_required_distance=0.1)
+                    print("WARNING: Unless you change this code it won't drive anywhere. The goal is too close to a wall. You need to find a place to safely view this spot.")
+                    
                     if target_x_y is not None:
                         tx,ty=target_x_y
                         self.goal_queue.append((tx,ty,0))
@@ -325,10 +350,9 @@ class ME134_Explorer:
                         print "No Frontiers found"
                         self.abort = True
                         pass
-                elif self.mode == "find_frontier":
-                    print "Rotating again"
+                elif self.mode == "Rotating":
                     self.AddInplaceRotationsToQueue()
-                    self.mode = "Rotating"
+                    self.next_mode = "find_frontier"
                     pass
                 else:
                     print "Unknown mode={}".format(self.mode)
