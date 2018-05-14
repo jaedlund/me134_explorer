@@ -141,10 +141,9 @@ class ME134_Explorer:
         
     def PlotMap(self,overlay=None,overlay_colors=None):
         assert self.last_map
-
         map_data = self.last_map_numpy
         map_extents = self.last_map_extents
-        #plt.imshow(self.last_map_from_above,extent=self.last_map_from_above_extents)
+
         fig,ax = plt.subplots()
         m = map_data
         image = numpy.zeros((m.shape[0],m.shape[1],3),dtype=numpy.uint8)
