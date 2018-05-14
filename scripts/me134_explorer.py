@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-## Simple talker demo that published std_msgs/Strings messages
-## to the 'chatter' topic
-
 import rospy
 import tf2_ros
 import ros_numpy
@@ -14,7 +11,7 @@ from geometry_msgs.msg import Pose, Point
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import MapMetaData
 from sensor_msgs.msg import LaserScan
-from actionlib_msgs.msg import GoalStatusArray
+#from actionlib_msgs.msg import GoalStatusArray
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 #from std_msgs.msg import Int8MultiArray
@@ -24,6 +21,8 @@ import matplotlib.pyplot as plt
 
 
 class ME134_Explorer:
+
+    # Initialize ME134_Explorer 
     def __init__(self):
         self.last_goal = None
 
@@ -48,13 +47,11 @@ class ME134_Explorer:
         rospy.Subscriber("map", OccupancyGrid, self.mapCallback)
         rospy.Subscriber("move_base/global_costmap/costmap", OccupancyGrid, self.globalCostMapCallback)
         #rospy.Subscriber("scan", LaserScan, self.scanCallback)
-        #rospy.Subscriber("move_base/status",GoalStatusArray, self.goalStatusCallback)
         rospy.loginfo('Subscribed to map, move_base/global_costmap/costmap topics')
         
         # Create a transform buffer (buffers messages for up to 10 seconds), and a listener to recieve tf2 messages from it. 
         self.tfBuffer = tf2_ros.Buffer()
         self.tfListener = tf2_ros.TransformListener(self.tfBuffer)
-        #self.tfListener.callback(self.poseCallback) # this line doesn't work
 
         # all_frames_as_string is useful for debugging, to see what transforms exist. 
         # It needs the sleep call because it takes a moment to start up
@@ -241,12 +238,13 @@ class ME134_Explorer:
     def FindFrontier(self,m):
         free_space_indices = numpy.where(m==0)
         #print "free_space_indices=",free_space_indices
-        # Brute force way
+        # Note: this is a brute force way - feel free to improve on it!
         frontier_indices = []
         for (ia,ib) in zip(*free_space_indices): # iterates through all free spaces
             has_unknown=False
             has_free=False
-            for off_ia,off_ib in ((-1,0),(1,0),(0,-1),(0,1)): # frontier is a free space with at least one non-diagonal neighbor unknown and one non-diagonal neighbor free
+            # We've defined a frontier as a free space with at least 1 unknown and 1 free non-diagonal neighbor
+            for off_ia,off_ib in ((-1,0),(1,0),(0,-1),(0,1)): 
                 if has_unknown and has_free:
                     break
                 ia_new,ib_new = ia+off_ia,ib+off_ib
@@ -317,9 +315,9 @@ class ME134_Explorer:
                 fig1=self.PlotCostMap()
                 fig2=self.PlotMap(overlay=self.overlay,overlay_colors=self.overlay_colors)
                 plt.show()  # have to close windows for program to continue
-                plt.close(fig1) # free figures so as to not run out of memory
+                plt.close(fig1) # this frees up the figures so as to not run out of memory
                 plt.close(fig2)
-            if self.goal_queue: # if there's anythign in the goal queue, do it
+            if self.goal_queue: # if there's anything in the goal queue, do it
                 x,y,yaw = self.goal_queue.pop(0)
                 self.PublishGoal(x,y,yaw)
                 pass
@@ -349,9 +347,9 @@ class ME134_Explorer:
                     # from a safe distance using the global_cost_map and/or
                     # another algorithm. Warning: global costmap doesn't always update regularly. 
                     # You can probably fix this if you want by subscribing to global_costmap_updates. 
-                    # I'm only going to attempt to go to the closest one
-                    # (probably not safe) for the demo.
-                    target_x_y = self.FindClosestFrontier(min_required_distance=0.1) # otherwise robot will try to go to the  frontier directly under the robot - at least at first, the laser scanner won't scan that!
+                    # I'm only going to attempt to go to the closest one (probably not safe) for the demo.
+                    target_x_y = self.FindClosestFrontier(min_required_distance=0.1) 
+                    # Min distance because otherwise robot will try to go to the frontier directly under the robot - at least at first, the laser scanner won't scan that!
                     print("WARNING: Unless you change this code it won't drive anywhere. The goal is too close to a wall. You need to find a place to safely view this spot.")
                     
                     if target_x_y is not None:
@@ -382,8 +380,6 @@ class ME134_Explorer:
     pass
 
 def explorer():
-    # send command to turn around, to get an initial map
-
     brain = ME134_Explorer()
     
     rate = rospy.Rate(10) # 10hz
@@ -394,16 +390,6 @@ def explorer():
         rate.sleep()
         pass
     pass
-
-def findGoal(poseData, mapData):
-    nextGoal = PoseStamped()
-    nextGoal.header.frame_id = "/map"
-    nextGoal.header.stamp = rospy.Time.now()
-    nextGoal.pose.position.z = 0.0
-    nextGoal.pose.position.x = 1.0 #change this
-    nextGoal.pose.position.y = 2.0 # change this
-    nextGoal.pose.orientation.w = 1.0
-    return nextGoal
 
 
 if __name__ == '__main__':
