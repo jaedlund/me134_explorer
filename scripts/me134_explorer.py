@@ -149,7 +149,8 @@ class ME134_Explorer:
         assert self.last_map
         map_data = self.last_map_numpy
         map_extents = self.last_map_extents
-
+        timestamp = self.last_map.info.map_load_time
+        
         fig,ax = plt.subplots()
         m = map_data
         image = numpy.zeros((m.shape[0],m.shape[1],3),dtype=numpy.uint8)
@@ -176,6 +177,7 @@ class ME134_Explorer:
             x,y,yaw= self.goal_queue[0]
             ax.plot(x,y,'x',label="next goal")
             pass
+        fig.suptitle("mode={} Close plots to proceed".format(self.mode))
         ax.legend(loc='best', fancybox=True, framealpha=0.5)
 
         return fig
@@ -192,7 +194,8 @@ class ME134_Explorer:
         ax.autoscale(tight=True)
         ax.set_xlabel("x position (m)")
         ax.set_ylabel("y position (m)")
-        ax.set_title("global cost map")
+        ax.set_title("global cost map (sometimes doesn't update)")
+        fig.suptitle("mode={} Close plots to proceed".format(self.mode))
         #x,y,yaw= self.Get_x_y_yaw()
         x,y,yaw= self.last_pose
         ax.plot(x,y,'o',label="robot") 
