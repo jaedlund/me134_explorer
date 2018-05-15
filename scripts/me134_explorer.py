@@ -23,7 +23,11 @@ import matplotlib.pyplot as plt
 class ME134_Explorer:
 
     # Initialize ME134_Explorer 
-    def __init__(self):
+    def __init__(self, strategy=None, safety_radius_m=None, initial_movement_m=None):
+        self.strategy = strategy if strategy is not None else "FindClosestFrontier"
+        self.safety_radius_m = safety_radius_m if safety_radius_m is not None else 0.1
+        self.initial_movement_m = initial_movement_m if initial_movement_m is not None else -0.25
+
         self.last_goal = None
 
         self.last_map = None
@@ -149,7 +153,6 @@ class ME134_Explorer:
         assert self.last_map
         map_data = self.last_map_numpy
         map_extents = self.last_map_extents
-        timestamp = self.last_map.info.map_load_time
         
         fig,ax = plt.subplots()
         m = map_data
@@ -213,6 +216,7 @@ class ME134_Explorer:
     #     pass
     
     def PublishGoal(self,x,y,yaw):
+        self.last_goal = (x,y,yaw)
         rospy.loginfo(rospy.get_caller_id()+" requesting to move to {}".format((x,y,yaw)))
         client = actionlib.SimpleActionClient('move_base',MoveBaseAction)
         client.wait_for_server()
@@ -269,12 +273,52 @@ class ME134_Explorer:
             pass
         return frontier_indices
 
+    def FindRandomEmptySpace(self, safety_radius_m=None):
+        info = self.last_map.info
+        resolution = info.resolution
+        m = self.last_map_numpy
+        #rx,ry,ryaw = self.last_pose
+        #robot_cell = self.ConvertMetersToMapIndices(rx,ry)
+
+        safety_radius_cells = safety_radius_m/resolution
+
+        free_space_indices = numpy.where(m==0)
+        assert free_space_indices
+        permutation = numpy.random.permutation(len(free_space_indices[0]))
+        for i in permutation:
+            ia,ib = free_space_indices[0][i],free_space_indices[1][i]
+            small_corner = (ia-safety_radius_cells,ib-safety_radius_cells)
+            large_corner = (ia+safety_radius_cells,ib+safety_radius_cells)
+            if small_corner[0] < 0 or small_corner[1] < 0:
+                continue
+            if large_corner[0] >= m.shape[0] or large_corner[1] >= m.shape[1]:
+                continue
+            square = m[small_corner[0]:large_corner[0],small_corner[1]:large_corner[1]]
+            s = set(square.flatten().tolist())
+            if -1 in s or 100 in s:
+                # There are walls or unknown space in the square, path planning might fail
+                continue
+            # Target found
+            tx,ty = self.ConvertMapIndicesToMeters(ia,ib)
+            return tx,ty
+        print "Failed to find any random safe place with safety_radius_m ={}".format(safety_radius_m)
+        return None
+
     def ConvertMapIndicesToMeters(self,ia,ib):
         info = self.last_map.info
         resolution = info.resolution
         x = info.origin.position.x + ib*resolution
         y = info.origin.position.y + ia*resolution
         return x,y
+
+    def ConvertMetersToMapIndices(self,x,y):
+        info = self.last_map.info
+        resolution = info.resolution
+        # This code hasn't been checked and might not round to the closest index
+        ib = int((x - info.origin.position.x)/resolution)
+        ia = int((y - info.origin.position.y)/resolution) 
+        return ia,ib
+
 
     # find the closest point on a frontier that is at least min_required_distance away
     # NOTE: If you are writing your own exploration algorithm, you will probably want to replace this method with your own
@@ -305,7 +349,7 @@ class ME134_Explorer:
         for (ia,ib) in self.frontier_indices:
             self.overlay[ia,ib]=1 # mark as frontier
             pass
-        
+        pass
 
     def Step(self):
         print "Mode=",self.mode
@@ -337,21 +381,21 @@ class ME134_Explorer:
                     # After that, you can move robot in any way you want
                     # TODO: maybe you can find a better way to do this
 
-                    self.AddMoveForwardToQueue(-0.25)
+                    self.AddMoveForwardToQueue(self.initial_movement_m)
                     # Then return to the starting place
-                    self.AddMoveForwardToQueue(0.25)
+                    self.AddMoveForwardToQueue(-self.initial_movement_m)
                     self.mode = "Initial Movement"
-                    self.next_mode = "find_frontier"
+                    self.next_mode = self.strategy
                     #self.next_mode = "Rotating" # If you still have visible frontiers 
                     pass
-                elif self.mode == "find_frontier":
+                elif self.mode == "FindClosestFrontier":
                     self.next_mode = "Rotating"
                     # You should find a position on the map that views a frontier
                     # from a safe distance using the global_cost_map and/or
                     # another algorithm. Warning: global costmap doesn't always update regularly. 
                     # You can probably fix this if you want by subscribing to global_costmap_updates. 
                     # I'm only going to attempt to go to the closest one (probably not safe) for the demo.
-                    target_x_y = self.FindClosestFrontier(min_required_distance=0.1) 
+                    target_x_y = self.FindClosestFrontier(min_required_distance=self.safety_radius_m) 
                     # Min distance because otherwise robot will try to go to the frontier directly under the robot - at least at first, the laser scanner won't scan that!
                     print("WARNING: Unless you change this code it won't drive anywhere. The goal is too close to a wall. You need to find a place to safely view this spot.")
                     
@@ -364,18 +408,33 @@ class ME134_Explorer:
                         print "No Frontiers found"
                         self.abort = True
                         pass
+                elif self.mode == "FindRandomEmptySpace":
+                    self.next_mode = "Rotating"
+                    # This just finds a random empty square of size 2*self.safety_radius_m by  2*self.safety_radius_m and attempts to go there.
+                    # This is a brute force random "dumb" way to explore. Students are expected to do something more efficient than this.
+                    target_x_y = self.FindRandomEmptySpace(safety_radius_m=self.safety_radius_m)
+
+                    if target_x_y is not None:
+                        tx,ty=target_x_y
+                        # we're setting yaw=0 here. You may want to compute yaw angle, or choose it carefully...
+                        self.goal_queue.append((tx,ty,0))
+                        pass
+                    else:
+                        print "No Random free space found"
+                        self.abort = True
+                        pass
                 elif self.mode == "Rotating":
                     self.AddInplaceRotationsToQueue()
-                    self.next_mode = "find_frontier"
+                    self.next_mode = self.strategy
                     pass
                 else:
-                    print "Unknown mode={}".format(self.mode)
+                    print "Unknown mode={}, perhaps your strategy is not recognized".format(self.mode)
                     return True
                 # *-------------------------------------------------------------*
                 pass
             pass
         else:
-            print "NoMapScan"
+            print "NoMap yet"
             pass
         if self.abort:
             return True
@@ -383,7 +442,14 @@ class ME134_Explorer:
     pass
 
 def explorer():
-    brain = ME134_Explorer()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('strategy', choices=['FindClosestFrontier', 'FindRandomEmptySpace'], default='FindClosestFrontie')
+    parser.add_argument('safety_radius_m', type=float, default=0.1)
+    parser.add_argument('initial_movement_m', type=float, default=0.25)
+    args = parser.parse_args()
+
+    brain = ME134_Explorer(strategy=args.strategy,safety_radius_m=args.safety_radius_m,initial_movement_m=args.initial_movement_m)
     
     rate = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
