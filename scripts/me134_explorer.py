@@ -23,11 +23,14 @@ import matplotlib.pyplot as plt
 class ME134_Explorer:
 
     # Initialize ME134_Explorer 
-    def __init__(self, strategy=None, safety_radius_m=None, initial_movement_m=None):
+    def __init__(self, strategy=None, safety_radius_m=None, initial_movement_m=None,
+                 plot_global_costmap=0,
+                 plot_map=1):
         self.strategy = strategy if strategy is not None else "FindClosestFrontier"
-        self.safety_radius_m = safety_radius_m if safety_radius_m is not None else 0.1
+        self.safety_radius_m = safety_radius_m if safety_radius_m is not None else 0.4
         self.initial_movement_m = initial_movement_m if initial_movement_m is not None else -0.25
-
+        self.plot_global_costmap = plot_global_costmap
+        self.plot_map = plot_map
         self.last_goal = None
 
         self.last_map = None
@@ -238,6 +241,8 @@ class ME134_Explorer:
             rospy.logerr("Action server not available!")
             rospy.signal_shutdown("Action server not available!")
         else:
+            # Unfortunately this result doesn't seem to tell us if the goal was achieved.
+            # Pull requests that actually get this information would be appreciated.
             return client.get_result()
         pass
 
@@ -355,18 +360,38 @@ class ME134_Explorer:
         print "Mode=",self.mode
         plotEachStep=True
         self.getLastPose()
+
         if self.CheckIfHaveFirstData():
+            if self.last_goal:
+                distance_to_last_goal = math.sqrt((self.last_pose[0]-self.last_goal[0])**2+(self.last_pose[1]-self.last_goal[1])**2)
+                if distance_to_last_goal > self.safety_radius_m:
+                    print "Failed to achieve goal {} robot is at {}, distance={}".format(self.last_goal,self.last_pose,distance_to_last_goal)
+                    pass
+                pass
             self.ProcessMap()
             print "goal_queue={}".format(self.goal_queue)
             if plotEachStep and (self.mode not in ["Rotating","Initial Movement"]): # self.mode - FSM markign current state
-                fig1=self.PlotCostMap()
-                fig2=self.PlotMap(overlay=self.overlay,overlay_colors=self.overlay_colors)
-                plt.show()  # have to close windows for program to continue
-                plt.close(fig1) # this frees up the figures so as to not run out of memory
-                plt.close(fig2)
+                if self.plot_global_costmap:
+                    fig1=self.PlotCostMap()
+                    pass
+                if self.plot_map:
+                    fig2=self.PlotMap(overlay=self.overlay,overlay_colors=self.overlay_colors)
+                    pass
+                if self.plot_map or self.plot_global_costmap:
+                    plt.show()  # have to close windows for program to continue
+                    pass
+                if self.plot_global_costmap:
+                    plt.close(fig1) # this frees up the figures so as to not run out of memory
+                    pass
+                if self.plot_map:
+                    plt.close(fig2)
+                    pass
+                pass
             if self.goal_queue: # if there's anything in the goal queue, do it
                 x,y,yaw = self.goal_queue.pop(0)
-                self.PublishGoal(x,y,yaw)
+                goal_result = self.PublishGoal(x,y,yaw)
+                # goal_result here appears to be always empty.
+                #print "PublishGoal({},{},{}) returned {}".format(x,y,yaw,goal_result)
                 pass
             else: # once done with goal queue, move on to the next step, given by self.next_mode
                 # Change the following code to run your algorithm
@@ -443,13 +468,27 @@ class ME134_Explorer:
 
 def explorer():
     import argparse
+    safety_radius_m_default = 0.25 # 0.1 doesn't work, 0.4 works
+    initial_movement_m_default = -0.25
+    plot_global_costmap_default=0
+    plot_map_default=1
+
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('strategy', choices=['FindClosestFrontier', 'FindRandomEmptySpace'], default='FindClosestFrontie')
-    parser.add_argument('safety_radius_m', type=float, default=0.1)
-    parser.add_argument('initial_movement_m', type=float, default=0.25)
+    parser.add_argument('--strategy', choices=['FindClosestFrontier', 'FindRandomEmptySpace'], default='FindClosestFrontier')
+    parser.add_argument('--safety_radius_m', type=float, default=safety_radius_m_default, help="default: {}".format(safety_radius_m_default))
+    parser.add_argument('--initial_movement_m', type=float, default=initial_movement_m_default, help="default: {}".format(initial_movement_m_default))
+
+    parser.add_argument('--plot_global_costmap', type=int, default=plot_global_costmap_default, help="default: {}".format(plot_global_costmap_default))
+    parser.add_argument('--plot_map', type=int, default=plot_map_default, help="default: {}".format(plot_map_default))
+
     args = parser.parse_args()
 
-    brain = ME134_Explorer(strategy=args.strategy,safety_radius_m=args.safety_radius_m,initial_movement_m=args.initial_movement_m)
+    brain = ME134_Explorer(strategy=args.strategy,
+                           safety_radius_m=args.safety_radius_m,
+                           initial_movement_m=args.initial_movement_m,
+                           plot_map=args.plot_map,
+                           plot_global_costmap=args.plot_global_costmap)
     
     rate = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
