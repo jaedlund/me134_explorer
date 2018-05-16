@@ -11,6 +11,7 @@ Included in those options (see below) is a --strategy option. This allows you to
 
 The global_cost_map doesn't seem to update regularly so I've turned off it's plotting by default. You're free to use it if you can figure out how to read the updates.
 
+```
 $ rosrun me134_explorer me134_explorer.py --help
 usage: me134_explorer.py [-h]
                          [--strategy {FindClosestFrontier,FindRandomEmptySpace}]
@@ -29,7 +30,6 @@ optional arguments:
   --plot_global_costmap PLOT_GLOBAL_COSTMAP
                         default: 0
   --plot_map PLOT_MAP   default: 1
-
-
+```
 
 Pull requests welcome.
