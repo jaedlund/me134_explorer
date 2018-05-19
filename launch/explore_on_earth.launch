@@ -23,6 +23,12 @@
   </node>
 -->
 
+<!---using laser scan filter to fix problem with inf values being shown as unknown space-->
+<node pkg="laser_filters" type="scan_to_scan_filter_chain" name="laser_filter">
+        <rosparam command="load" file="$(find me134_explorer)/launch/includes/hokuyo_config.yaml" /> 
+        <!--<remap from="scan_filtered" to="scan" />-->
+</node>
+
 <node pkg="me134_explorer" name="tf_setup_py" type="tf_setup.py" output="screen"/>
 
   <!--  ************** Navigation  ***************  -->
