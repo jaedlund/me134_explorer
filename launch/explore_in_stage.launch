@@ -49,10 +49,10 @@
     <arg name="stacks" value="$(arg stacks)" />
     <arg name="3d_sensor" value="$(arg 3d_sensor)" />
   </include>
-<!--  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
     <param name="use_gui" value="true"/>
   </node>
--->
+
   <!-- Command Velocity multiplexer -->
   <node pkg="nodelet" type="nodelet" name="mobile_base_nodelet_manager" args="manager"/>
   <node pkg="nodelet" type="nodelet" name="cmd_vel_mux" args="load yocs_cmd_vel_mux/CmdVelMuxNodelet mobile_base_nodelet_manager">
@@ -82,7 +82,7 @@
 -->
   
   <!--include file="$(find turtlebot_navigation)/launch/includes/gmapping/gmapping.launch.xml"-->
-  <include file="$(find me134_explorer)/launch/includes/gmapping/gmapping.launch.xml">
+  <include file="$(find me134_explorer)/launch/includes/gmapping/gmapping_in_stage.launch.xml">
   </include>
 
   <!--  **************** Visualisation ****************  -->
