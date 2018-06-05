@@ -76,7 +76,12 @@ class ME134_Explorer:
     # This works, but you might find a better way
     def AddInplaceRotationsToQueue(self):
         x,y,yaw = self.last_pose
-        for yaw_target in [math.pi/2,math.pi,-math.pi/2,0]:
+        # for yaw_target in [math.pi/2,math.pi,-math.pi/2,0]:
+        if yaw >=0:
+            rotate = yaw - math.pi
+        else:
+            rotate = yaw + math.pi
+        for yaw_target in [rotate]:
             self.goal_queue.append((x,y,yaw_target))
             pass
         pass
@@ -468,7 +473,7 @@ class ME134_Explorer:
 
 def explorer():
     import argparse
-    safety_radius_m_default = 0.25 # 0.1 doesn't work, 0.4 works
+    safety_radius_m_default = 0.3 # 0.1 doesn't work, 0.4 works
     initial_movement_m_default = -0.25
     plot_global_costmap_default=0
     plot_map_default=1

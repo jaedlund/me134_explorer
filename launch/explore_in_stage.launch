@@ -71,20 +71,20 @@
      </node>
 
 
-<!-- 
-  <include file="$(find turtlebot_navigation)/launch/includes/amcl/amcl.launch.xml">
+
+  <!-- <include file="$(find turtlebot_navigation)/launch/includes/amcl/amcl.launch.xml">
     <arg name="scan_topic" value="scan"/>
     <arg name="use_map_topic" value="true"/>
     <arg name="initial_pose_x" value="$(arg initial_pose_x)"/>
     <arg name="initial_pose_y" value="$(arg initial_pose_y)"/>
     <arg name="initial_pose_a" value="$(arg initial_pose_a)"/>
-   </include>
--->
+   </include> -->
+
   
   <!--include file="$(find turtlebot_navigation)/launch/includes/gmapping/gmapping.launch.xml"-->
   <include file="$(find me134_explorer)/launch/includes/gmapping/gmapping_in_stage.launch.xml">
   </include>
 
   <!--  **************** Visualisation ****************  -->
-  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find turtlebot_stage)/rviz/robot_navigation.rviz"/>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find me134_explorer)/rviz/robot_navigation.rviz"/>
 </launch>
