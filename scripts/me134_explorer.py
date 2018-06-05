@@ -9,6 +9,7 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from geometry_msgs.msg import Pose, Point
 from nav_msgs.msg import OccupancyGrid
+from map_msgs.msg import OccupancyGridUpdate
 from nav_msgs.msg import MapMetaData
 from sensor_msgs.msg import LaserScan
 #from actionlib_msgs.msg import GoalStatusArray
@@ -41,6 +42,9 @@ class ME134_Explorer:
         self.last_global_costmap_numpy = None
         self.last_global_costmap_extents = None
 
+        self.last_updated_costmap_numpy = None
+        self.last_updated_costmap_extents = None
+
         self.last_pose = None # this will be a tuple of (x position, y position, yaw angle)
         self.abort = False
         self.mode = None
@@ -53,6 +57,7 @@ class ME134_Explorer:
         #rospy.Subscriber("amcl_pose", PoseWithCovarianceStamped, self.poseCallback)
         rospy.Subscriber("map", OccupancyGrid, self.mapCallback)
         rospy.Subscriber("move_base/global_costmap/costmap", OccupancyGrid, self.globalCostMapCallback)
+        rospy.Subscriber("move_base/global_costmap/costmap_updates", OccupancyGridUpdate, self.globalCostMapUpdateCallback)
         #rospy.Subscriber("scan", LaserScan, self.scanCallback)
         rospy.loginfo('Subscribed to map, move_base/global_costmap/costmap topics')
         
@@ -140,10 +145,15 @@ class ME134_Explorer:
 
         pass
 
+    def occupancygridupdate_to_numpy(self,msg):
+        data = numpy.asarray(msg.data, dtype=numpy.int8).reshape(msg.height, msg.width)
+        return numpy.ma.array(data, mask=data==-1, fill_value=-1)
+
     def globalCostMapCallback(self,occupancyGridData):
         #rospy.loginfo(rospy.get_caller_id()+"map received: {}".format(occupancyGridData))
         #rospy.loginfo(rospy.get_caller_id()+" map received.")
         self.last_global_costmap = occupancyGridData
+        
         # occupancygrid_to_numpy returns a masked numpy array, we use the .data to remove the mask.
         self.last_global_costmap_numpy = ros_numpy.occupancy_grid.occupancygrid_to_numpy(occupancyGridData)
         #self.last_map_from_above = numpy.flipud(self.last_map_numpy)
@@ -154,7 +164,20 @@ class ME134_Explorer:
         bottom = occupancyGridData.info.origin.position.y
         top = bottom + occupancyGridData.info.height*resolution
         self.last_global_costmap_extents = (left,right,bottom,top)
+        pass
     
+    def globalCostMapUpdateCallback(self,msg):
+        self.last_updated_costmap_numpy = self.occupancygridupdate_to_numpy(msg)
+        # Need to do the next step using slices for speed
+        self.last_global_costmap_numpy[msg.y:msg.y+msg.height,msg.x:msg.x+msg.height]=self.last_updated_costmap_numpy
+        #for i in range(msg.height):
+        #    for j in range(msg.width):
+        #        self.last_global_costmap_numpy[msg.y+i,msg.x+j] = self.last_updated_costmap_numpy[i,j]
+        left = msg.x
+        right = left + msg.width
+        bottom = msg.y
+        top = bottom + msg.height
+        self.last_updated_costmap_extents = (left,right,bottom,top)
         pass
         
     def PlotMap(self,overlay=None,overlay_colors=None):
@@ -183,10 +206,13 @@ class ME134_Explorer:
         ax.set_ylabel("y position (m)")
         ax.set_title("map")
         x,y,yaw= self.last_pose
-        ax.plot(x,y,'o', label="robot") # TODO: plot robot pointing direction 
+        ax.plot(x,y,'ro', label="robot")
+        ax.plot([x,math.cos(yaw)+x], [y, math.sin(yaw)+y], "red", label="current orientation")
+ 
         if self.goal_queue: # If non-empty goal queue, plot first goal in the queue
             x,y,yaw= self.goal_queue[0]
-            ax.plot(x,y,'x',label="next goal")
+            ax.plot(x,y,'go',label="next goal")
+            ax.plot([x,math.cos(yaw)+x], [y, math.sin(yaw)+y], "green", label="next goal orientation")
             pass
         fig.suptitle("mode={} Close plots to proceed".format(self.mode))
         ax.legend(loc='best', fancybox=True, framealpha=0.5)
@@ -196,7 +222,7 @@ class ME134_Explorer:
     # plots the most recent costmap (from subscribed topic)
     def PlotCostMap(self):
         assert self.last_global_costmap
-                
+        
         #plt.imshow(self.last_map_from_above,extent=self.last_map_from_above_extents)
         fig,ax = plt.subplots()
         m = self.last_global_costmap_numpy
@@ -209,13 +235,39 @@ class ME134_Explorer:
         fig.suptitle("mode={} Close plots to proceed".format(self.mode))
         #x,y,yaw= self.Get_x_y_yaw()
         x,y,yaw= self.last_pose
-        ax.plot(x,y,'o',label="robot") 
+        ax.plot(x,y,'ro',label="robot")
+        ax.plot([x,math.cos(yaw)+x], [y, math.sin(yaw)+y], "red", label="current orientation")
         if self.goal_queue:
             x,y,yaw= self.goal_queue[0]
-            ax.plot(x,y,'x',label="next goal")
+            ax.plot(x,y,'go',label="next goal")
+            ax.plot([x,math.cos(yaw)+x], [y, math.sin(yaw)+y], "green", label="next goal orientation")
             pass
         ax.legend(loc='best', fancybox=True, framealpha=0.5)
         return fig
+
+    def PlotUpdatedCostMap(self):
+        #plt.imshow(self.last_map_from_above,extent=self.last_map_from_above_extents)
+        fig,ax = plt.subplots()
+        m = self.last_updated_costmap_numpy
+        m_extents = self.last_updated_costmap_extents
+        ax.imshow(m,extent=m_extents,origin='lower',cmap='Oranges',interpolation='none')
+        ax.autoscale(tight=True)
+        ax.set_xlabel("x position (m)")
+        ax.set_ylabel("y position (m)")
+        ax.set_title("global cost map update")
+        fig.suptitle("mode={} Close plots to proceed".format(self.mode))
+        #x,y,yaw= self.Get_x_y_yaw()
+        x,y,yaw= self.last_pose
+        ax.plot(x,y,'ro',label="robot")
+        ax.plot([x,math.cos(yaw)+x], [y, math.sin(yaw)+y], "red", label="current orientation")
+        if self.goal_queue:
+            x,y,yaw= self.goal_queue[0]
+            ax.plot(x,y,'go',label="next goal")
+            ax.plot([x,math.cos(yaw)+x], [y, math.sin(yaw)+y], "green", label="next goal orientation")
+            pass
+        ax.legend(loc='best', fancybox=True, framealpha=0.5)
+        return fig
+
 
     # def scanCallback(self,scanData):
     #     #rospy.loginfo(rospy.get_caller_id()+"map received: {}".format(occupancyGridData))
