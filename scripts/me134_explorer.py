@@ -26,11 +26,13 @@ class ME134_Explorer:
     # Initialize ME134_Explorer 
     def __init__(self, strategy=None, safety_radius_m=None, initial_movement_m=None,
                  plot_global_costmap=0,
+                 plot_global_costmap_update=0,
                  plot_map=1):
         self.strategy = strategy if strategy is not None else "FindClosestFrontier"
         self.safety_radius_m = safety_radius_m if safety_radius_m is not None else 0.4
         self.initial_movement_m = initial_movement_m if initial_movement_m is not None else -0.25
         self.plot_global_costmap = plot_global_costmap
+        self.plot_global_costmap_update = plot_global_costmap_update
         self.plot_map = plot_map
         self.last_goal = None
 
@@ -168,15 +170,18 @@ class ME134_Explorer:
     
     def globalCostMapUpdateCallback(self,msg):
         self.last_updated_costmap_numpy = self.occupancygridupdate_to_numpy(msg)
+        print "last_updated_costmap_numpy.shape=",self.last_updated_costmap_numpy.shape,"x=",msg.x,"y=",msg.y,"msg.height=",msg.height,"msg.width=",msg.width
         # Need to do the next step using slices for speed
-        self.last_global_costmap_numpy[msg.y:msg.y+msg.height,msg.x:msg.x+msg.height]=self.last_updated_costmap_numpy
+        self.last_global_costmap_numpy[msg.y:msg.y+msg.height,msg.x:msg.x+msg.width]=self.last_updated_costmap_numpy
         #for i in range(msg.height):
         #    for j in range(msg.width):
         #        self.last_global_costmap_numpy[msg.y+i,msg.x+j] = self.last_updated_costmap_numpy[i,j]
-        left = msg.x
-        right = left + msg.width
-        bottom = msg.y
-        top = bottom + msg.height
+        info = self.last_map.info
+        resolution = info.resolution
+        left = self.last_global_costmap_extents[0] + resolution*msg.x
+        right = left + msg.width*resolution
+        bottom = self.last_global_costmap_extents[2] + resolution*msg.y
+        top = bottom + msg.height*resolution
         self.last_updated_costmap_extents = (left,right,bottom,top)
         pass
         
@@ -246,6 +251,9 @@ class ME134_Explorer:
         return fig
 
     def PlotUpdatedCostMap(self):
+        if self.last_updated_costmap_numpy is None:
+            print "No updated costmap yet"
+            return None
         #plt.imshow(self.last_map_from_above,extent=self.last_map_from_above_extents)
         fig,ax = plt.subplots()
         m = self.last_updated_costmap_numpy
@@ -342,7 +350,7 @@ class ME134_Explorer:
         #rx,ry,ryaw = self.last_pose
         #robot_cell = self.ConvertMetersToMapIndices(rx,ry)
 
-        safety_radius_cells = safety_radius_m/resolution
+        safety_radius_cells = int(safety_radius_m/resolution)
 
         free_space_indices = numpy.where(m==0)
         assert free_space_indices
@@ -434,6 +442,10 @@ class ME134_Explorer:
                 if self.plot_map:
                     fig2=self.PlotMap(overlay=self.overlay,overlay_colors=self.overlay_colors)
                     pass
+                if self.plot_global_costmap_update:
+                    fig3=self.PlotUpdatedCostMap()
+                    pass
+
                 if self.plot_map or self.plot_global_costmap:
                     plt.show()  # have to close windows for program to continue
                     pass
@@ -442,6 +454,9 @@ class ME134_Explorer:
                     pass
                 if self.plot_map:
                     plt.close(fig2)
+                    pass
+                if fig3:
+                    plt.close(fig3) 
                     pass
                 pass
             if self.goal_queue: # if there's anything in the goal queue, do it
@@ -528,6 +543,7 @@ def explorer():
     safety_radius_m_default = 0.3 # 0.1 doesn't work, 0.4 works
     initial_movement_m_default = -0.25
     plot_global_costmap_default=0
+    plot_global_costmap_update_default=0
     plot_map_default=1
 
 
@@ -537,6 +553,7 @@ def explorer():
     parser.add_argument('--initial_movement_m', type=float, default=initial_movement_m_default, help="default: {}".format(initial_movement_m_default))
 
     parser.add_argument('--plot_global_costmap', type=int, default=plot_global_costmap_default, help="default: {}".format(plot_global_costmap_default))
+    parser.add_argument('--plot_global_costmap_update', type=int, default=plot_global_costmap_update_default, help="default: {}".format(plot_global_costmap_update_default))
     parser.add_argument('--plot_map', type=int, default=plot_map_default, help="default: {}".format(plot_map_default))
 
     args = parser.parse_args()
@@ -545,7 +562,8 @@ def explorer():
                            safety_radius_m=args.safety_radius_m,
                            initial_movement_m=args.initial_movement_m,
                            plot_map=args.plot_map,
-                           plot_global_costmap=args.plot_global_costmap)
+                           plot_global_costmap=args.plot_global_costmap,
+                           plot_global_costmap_update=args.plot_global_costmap_update)
     
     rate = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
