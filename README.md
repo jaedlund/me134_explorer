@@ -4,10 +4,29 @@ This is a sample ROS node for students in CS/EE/ME 134 to clone and modify to ex
 
 See [lab3_prelab.pdf](./lab3_prelab.pdf) for instructions on running in stage. Instructions for running on the real robot are below.
 
-In addition to what's described in the lab3_prelab.pdf I have added command line options to the me134_explorer.py.
-Included in those options (see below) is a --strategy option. This allows you to change the default strategy from FindClosestFrontier (which fails because it would crash the robot into a wall) to FindRandomEmptySpace (which just finds a random empty square of 2*safety_radius_m  meters by 2*safety_radius_m meters. You are expected to write an algorithm that explores the map more efficiently than FindRandomEmptySpace.
+In addition to what's described in the lab3_prelab.pdf I have added
+command line options to the me134_explorer.py.  Included in those
+options (see below) is a --strategy option. This allows you to change
+the default strategy from FindClosestFrontier (which fails because it
+would crash the robot into a wall) to FindRandomEmptySpace (which just
+finds a random empty square of 2*safety_radius_m meters by
+2*safety_radius_m meters. You are expected to write an algorithm that
+explores the map more efficiently than FindRandomEmptySpace.
 
-The global_cost_map doesn't seem to update regularly so I've turned off it's plotting by default. You're free to use it if you can figure out how to read the updates.
+Your algorithm is also expected to safely explore the space without
+running into obstacles or unknown space (which could contain
+obstacles). Find a safe place to view unknown space without touching
+it. Not all unknown space will be reachable or viewable. Ideally your
+algorithm would ignore non-reachable frontiers.
+
+
+After June 5, 2018 global_cost_map_updates are subscribed to and
+processed. Note that the cost map only gives you the cost from known
+obstacles. You will have to figure out how to avoid unknown spaces
+your self. You can also make the costmap your self from the map and
+add your own cost for unknown areas. (In fact for teaching purposes,
+consider not using the global_cost_map at all and make your own.)
+
 
 ```
 $ rosrun me134_explorer me134_explorer.py --help
@@ -16,21 +35,24 @@ usage: me134_explorer.py [-h]
                          [--safety_radius_m SAFETY_RADIUS_M]
                          [--initial_movement_m INITIAL_MOVEMENT_M]
                          [--plot_global_costmap PLOT_GLOBAL_COSTMAP]
+                         [--plot_global_costmap_update PLOT_GLOBAL_COSTMAP_UPDATE]
                          [--plot_map PLOT_MAP]
 
 optional arguments:
   -h, --help            show this help message and exit
   --strategy {FindClosestFrontier,FindRandomEmptySpace}
   --safety_radius_m SAFETY_RADIUS_M
-                        default: 0.25
+                        default: 0.3
   --initial_movement_m INITIAL_MOVEMENT_M
                         default: -0.25
   --plot_global_costmap PLOT_GLOBAL_COSTMAP
                         default: 0
+  --plot_global_costmap_update PLOT_GLOBAL_COSTMAP_UPDATE
+                        default: 0
   --plot_map PLOT_MAP   default: 1
 ```
 
-Pull requests welcome.
+Pull requests welcome. Especially if you figure out how to get AMCL to work with this setup in stage and/or a real turtlebot. 
 
 ## Running me134_explorer.py on the real turtlebot
 
@@ -68,7 +90,7 @@ In another terminal window or using tmux, terminator, etc run again on the turtl
 ```
 turtlebot> sudo chmod a+rw /dev/ttyACM0
 ```
-Note to future TAs: Figure out how to have these permissions set correctly automatically. It's not that hard, but we're out of time.
+Note to future TAs: Use [udev](https://answers.ros.org/question/224028/permanently-set-permissions-for-devttyacm0-port-using-udev/) to set these permissions automatically.
 
 Then run:
 ```

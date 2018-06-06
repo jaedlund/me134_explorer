@@ -236,7 +236,7 @@ class ME134_Explorer:
         ax.autoscale(tight=True)
         ax.set_xlabel("x position (m)")
         ax.set_ylabel("y position (m)")
-        ax.set_title("global cost map (sometimes doesn't update)")
+        ax.set_title("global cost map (with updates)")
         fig.suptitle("mode={} Close plots to proceed".format(self.mode))
         #x,y,yaw= self.Get_x_y_yaw()
         x,y,yaw= self.last_pose
@@ -489,8 +489,7 @@ class ME134_Explorer:
                     self.next_mode = "Rotating"
                     # You should find a position on the map that views a frontier
                     # from a safe distance using the global_cost_map and/or
-                    # another algorithm. Warning: global costmap doesn't always update regularly. 
-                    # You can probably fix this if you want by subscribing to global_costmap_updates. 
+                    # another algorithm. Note that the global_cost_map warn you about unknown areas, you must avoid them yourself.
                     # I'm only going to attempt to go to the closest one (probably not safe) for the demo.
                     target_x_y = self.FindClosestFrontier(min_required_distance=self.safety_radius_m) 
                     # Min distance because otherwise robot will try to go to the frontier directly under the robot - at least at first, the laser scanner won't scan that!
